@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>네온 슈팅 - 라이벌 대전</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #030308;
+            color: #fff;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .font-orbitron {
+            font-family: 'Orbitron', 'Noto Sans KR', sans-serif;
+        }
+
+        .neon-box-cyan {
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.4), inset 0 0 15px rgba(0, 243, 255, 0.2);
+            border: 2px solid #00f3ff;
+        }
+
+        .neon-text-cyan { text-shadow: 0 0 10px #00f3ff, 0 0 20px #00f3ff; }
+        .neon-text-pink { text-shadow: 0 0 10px #ff007f, 0 0 20px #ff007f; }
+        .neon-text-green { text-shadow: 0 0 10px #00ff66, 0 0 20px #00ff66; }
+        
+        .char-card {
+            transition: all 0.25s ease-out;
+        }
+        .char-card:hover, .char-card.selected {
+            transform: translateY(-6px) scale(1.02);
+            box-shadow: 0 0 25px rgba(0, 243, 255, 0.8);
+        }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #00f3ff; border-radius: 4px; }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col justify-center items-center relative bg-slate-950">
+
+    <!-- Game Canvas Container -->
+    <div id="game-container" class="relative w-full h-full max-w-7xl max-h-[900px] flex justify-center items-center p-2 sm:p-4">
+        <canvas id="gameCanvas" class="w-full h-full rounded-xl bg-slate-900 border-2 border-cyan-500/40 shadow-2xl block"></canvas>
+
+        <!-- Overlay HUD (In Game) -->
+        <div id="hud-overlay" class="hidden absolute inset-0 pointer-events-none p-4 flex flex-col justify-between">
+            <!-- Top HUD Bar -->
+            <div class="flex justify-between items-start w-full">
+                <!-- Player Health & Ammo Gauge -->
+                <div class="flex flex-col gap-2 bg-slate-900/85 backdrop-blur-md p-3.5 rounded-xl border border-cyan-500/30 w-72 sm:w-88 pointer-events-auto shadow-lg">
+                    <div class="flex justify-between items-center">
+                        <span id="hud-char-name" class="font-orbitron font-bold text-cyan-400 text-base">스피드 러너</span>
+                        <div class="flex items-center gap-1.5">
+                            <span id="hud-regen-badge" class="hidden text-[10px] font-bold text-green-400 bg-green-950/80 border border-green-500/50 px-1.5 py-0.5 rounded animate-pulse">자동 회복 중</span>
+                            <span id="hud-hp-text" class="font-orbitron font-bold text-xs text-slate-200">1500 / 1500</span>
+                        </div>
+                    </div>
+                    <!-- HP Bar -->
+                    <div class="w-full bg-slate-950 h-4 rounded-full overflow-hidden border border-slate-700 relative">
+                        <div id="hud-hp-bar" class="bg-gradient-to-r from-red-500 via-pink-500 to-green-400 h-full w-full transition-all duration-75"></div>
+                    </div>
+                    <!-- Ammo Gauge -->
+                    <div class="flex justify-between items-center mt-1">
+                        <span class="text-xs text-slate-400 font-bold">탄약 잔여량</span>
+                        <span id="hud-ammo-text" class="font-orbitron font-bold text-lg text-yellow-400">30 / 30</span>
+                    </div>
+                    <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-700">
+                        <div id="hud-ammo-bar" class="bg-yellow-400 h-full w-full transition-all duration-150"></div>
+                    </div>
+                    <!-- Reloading Progress Indicator -->
+                    <div id="reload-indicator" class="hidden flex flex-col gap-1 mt-1">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[11px] text-pink-400 font-bold animate-pulse">재장전 중...</span>
+                            <span class="text-[10px] text-slate-400 font-bold">[R]</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div id="reload-bar" class="bg-pink-500 h-full w-0"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Score & Kill Progress -->
+                <div class="flex flex-col items-end gap-2 pointer-events-auto">
+                    <div class="bg-slate-900/85 backdrop-blur-md p-3.5 rounded-xl border border-cyan-500/30 text-right">
+                        <div class="text-xs text-slate-400 font-bold">남은 적 요원</div>
+                        <div id="hud-enemy-count" class="font-orbitron text-3xl font-black text-pink-500 neon-text-pink">9 / 9</div>
+                    </div>
+                    <div class="text-[11px] text-slate-300 bg-slate-950/80 px-3.5 py-2 rounded-lg border border-slate-800 backdrop-blur-sm shadow-md">
+                        조작: <span class="text-cyan-400 font-bold">WASD</span> 이동 | <span class="text-cyan-400 font-bold">마우스</span> 조준/발사 | <span class="text-yellow-400 font-bold">R</span> 재장전 | <span class="text-pink-400 font-bold">C</span> 일시정지
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- START SCREEN MODAL -->
+        <div id="start-modal" class="absolute inset-0 bg-slate-950/90 backdrop-blur-lg flex flex-col items-center justify-between p-6 z-20 overflow-y-auto">
+            <div class="text-center mt-2">
+                <h1 class="text-4xl sm:text-6xl font-black font-orbitron text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-500 to-yellow-400 neon-text-cyan tracking-wider">
+                    NEON SHOOTING
+                </h1>
+                <p class="text-cyan-300/80 text-sm sm:text-base font-semibold mt-2">라이벌 캐릭터 9인 서바이벌 - 데미지 & 체력 대폭 상향 판</p>
+            </div>
+
+            <!-- Character Selector Grid -->
+            <div class="w-full max-w-5xl my-4">
+                <h2 class="text-center text-slate-200 font-bold mb-4 text-sm sm:text-base">전투에 참여할 플레이어 캐릭터를 선택하세요</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    
+                    <!-- Char 1 -->
+                    <div class="char-card selected border-cyan-500 bg-slate-900/90 p-4 rounded-xl border cursor-pointer flex flex-col items-center text-center" data-char="0">
+                        <div class="w-16 h-16 rounded-full bg-cyan-500/20 border-2 border-cyan-400 flex items-center justify-center mb-3">
+                            <span class="text-2xl">⚡</span>
+                        </div>
+                        <h3 class="font-orbitron font-bold text-cyan-400 text-lg">스피드 러너</h3>
+                        <p class="text-xs text-slate-300 mt-1">빠른 기동력과 고연사 속사형 딜러</p>
+                        <div class="w-full bg-slate-950 p-2.5 rounded-lg mt-3 text-left text-[11px] text-slate-300 flex flex-col gap-1 border border-slate-800">
+                            <div>체력: <span class="text-green-400 font-bold">1,500 HP</span> (+초당 75 회복)</div>
+                            <div>무기: <span class="text-cyan-300 font-semibold">듀얼 SMG (데미지 35)</span></div>
+                            <div>탄창: <span class="text-yellow-400 font-semibold">30발</span> (재장전 1.0초)</div>
+                            <div>이동속도: <span class="text-cyan-400 font-semibold">최상 (6.5)</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Char 2 -->
+                    <div class="char-card border-pink-500/40 bg-slate-900/90 p-4 rounded-xl border cursor-pointer flex flex-col items-center text-center" data-char="1">
+                        <div class="w-16 h-16 rounded-full bg-pink-500/20 border-2 border-pink-400 flex items-center justify-center mb-3">
+                            <span class="text-2xl">🛡️</span>
+                        </div>
+                        <h3 class="font-orbitron font-bold text-pink-400 text-lg">헤비 탱크</h3>
+                        <p class="text-xs text-slate-300 mt-1">압도적인 체력과 초근접 샷건 화력</p>
+                        <div class="w-full bg-slate-950 p-2.5 rounded-lg mt-3 text-left text-[11px] text-slate-300 flex flex-col gap-1 border border-slate-800">
+                            <div>체력: <span class="text-green-400 font-bold">2,500 HP</span> (+초당 100 회복)</div>
+                            <div>무기: <span class="text-pink-300 font-semibold">플라즈마 샷건 (30x6)</span></div>
+                            <div>탄창: <span class="text-yellow-400 font-semibold">8발</span> (재장전 1.8초)</div>
+                            <div>이동속도: <span class="text-cyan-400 font-semibold">보통 (4.8)</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Char 3 -->
+                    <div class="char-card border-purple-500/40 bg-slate-900/90 p-4 rounded-xl border cursor-pointer flex flex-col items-center text-center" data-char="2">
+                        <div class="w-16 h-16 rounded-full bg-purple-500/20 border-2 border-purple-400 flex items-center justify-center mb-3">
+                            <span class="text-2xl">🎯</span>
+                        </div>
+                        <h3 class="font-orbitron font-bold text-purple-400 text-lg">네온 스나이퍼</h3>
+                        <p class="text-xs text-slate-300 mt-1">초고위력 관통 레일건 저격수</p>
+                        <div class="w-full bg-slate-950 p-2.5 rounded-lg mt-3 text-left text-[11px] text-slate-300 flex flex-col gap-1 border border-slate-800">
+                            <div>체력: <span class="text-green-400 font-bold">1,800 HP</span> (+초당 80 회복)</div>
+                            <div>무기: <span class="text-purple-300 font-semibold">레일건 (데미지 280)</span></div>
+                            <div>탄창: <span class="text-yellow-400 font-semibold">5발</span> (재장전 2.0초)</div>
+                            <div>이동속도: <span class="text-cyan-400 font-semibold">빠름 (5.2)</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Char 4 -->
+                    <div class="char-card border-yellow-500/40 bg-slate-900/90 p-4 rounded-xl border cursor-pointer flex flex-col items-center text-center" data-char="3">
+                        <div class="w-16 h-16 rounded-full bg-yellow-500/20 border-2 border-yellow-400 flex items-center justify-center mb-3">
+                            <span class="text-2xl">⚔️</span>
+                        </div>
+                        <h3 class="font-orbitron font-bold text-yellow-400 text-lg">사이버 검객</h3>
+                        <p class="text-xs text-slate-300 mt-1">무제한 검기와 속사 피스톨 조합</p>
+                        <div class="w-full bg-slate-950 p-2.5 rounded-lg mt-3 text-left text-[11px] text-slate-300 flex flex-col gap-1 border border-slate-800">
+                            <div>체력: <span class="text-green-400 font-bold">2,000 HP</span> (+초당 90 회복)</div>
+                            <div>무기: <span class="text-yellow-300 font-semibold">네온 검기 (130) / 피스톨 (45)</span></div>
+                            <div>탄창: <span class="text-yellow-400 font-semibold">피스톨 12발 (검기 무제한)</span></div>
+                            <div>이동속도: <span class="text-cyan-400 font-semibold">매우 빠름 (6.0)</span></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Start Controls Instruction & Button -->
+            <div class="flex flex-col items-center gap-3 mb-2">
+                <button id="btn-start" class="px-10 py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-orbitron font-black text-xl rounded-xl shadow-lg transition-all transform hover:scale-105 active:scale-95">
+                    전투 시작 (ENTER)
+                </button>
+                <p class="text-xs text-slate-400"><span class="text-green-400 font-bold">※ 피격 후 1초간 공격받지 않으면 체력이 빠른 속도로 자동 회복됩니다!</span></p>
+            </div>
+        </div>
+
+        <!-- PAUSE MODAL OVERLAY -->
+        <div id="pause-modal" class="hidden absolute inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center z-30">
+            <div class="bg-slate-900 border-2 border-cyan-400/60 p-8 rounded-2xl text-center max-w-md w-full shadow-2xl flex flex-col items-center gap-6">
+                <h2 class="text-3xl font-black font-orbitron text-cyan-400 neon-text-cyan">일시 정지</h2>
+                <p class="text-sm text-slate-300">작전이 일시 중지되었습니다.</p>
+                <div class="flex flex-col gap-3 w-full">
+                    <button id="btn-resume" class="w-full py-3 bg-cyan-500 text-slate-950 font-bold font-orbitron rounded-xl hover:bg-cyan-400 transition-all">
+                        이어하기 (C 키)
+                    </button>
+                    <button id="btn-restart-pause" class="w-full py-3 bg-slate-800 text-slate-300 font-bold font-orbitron rounded-xl hover:bg-slate-700 border border-slate-700 transition-all">
+                        처음부터 다시 시작
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAME OVER / VICTORY MODAL OVERLAY -->
+        <div id="end-modal" class="hidden absolute inset-0 bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center z-40 p-4">
+            <div class="bg-slate-900 border-2 border-pink-500/60 p-8 rounded-2xl text-center max-w-lg w-full shadow-2xl flex flex-col items-center gap-5">
+                <h2 id="end-title" class="text-4xl font-black font-orbitron text-pink-500 neon-text-pink">STAGE CLEAR</h2>
+                <p id="end-desc" class="text-sm text-slate-300">모든 라이벌 요원을 처치했습니다!</p>
+
+                <div class="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col gap-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">처치한 적 요원:</span>
+                        <span id="stat-kills" class="font-orbitron font-bold text-pink-400">9 / 9</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">선택한 클래스:</span>
+                        <span id="stat-class" class="font-orbitron font-bold text-cyan-400">스피드 러너</span>
+                    </div>
+                </div>
+
+                <button id="btn-restart" class="w-full py-3.5 bg-gradient-to-r from-pink-500 to-cyan-500 text-slate-950 font-black font-orbitron text-lg rounded-xl shadow-lg hover:opacity-90 transition-all transform hover:scale-102">
+                    다시 도전하기
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 1. Sound System (File Loading + Web Audio Synth Fallback) ---
+        class SoundSystem {
+            constructor() {
+                this.audioCtx = null;
+                this.shootAudio = new Audio('sounds/shoot.ogg');
+                this.sliceAudio = new Audio('sounds/slice.ogg');
+                this.shootLoaded = false;
+                this.sliceLoaded = false;
+
+                this.shootAudio.addEventListener('canplaythrough', () => { this.shootLoaded = true; });
+                this.sliceAudio.addEventListener('canplaythrough', () => { this.sliceLoaded = true; });
+            }
+
+            initAudio() {
+                if (!this.audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        this.audioCtx = new AudioContext();
+                    }
+                }
+                if (this.audioCtx && this.audioCtx.state === 'suspended') {
+                    this.audioCtx.resume();
+                }
+            }
+
+            playShoot() {
+                this.initAudio();
+                if (this.shootLoaded) {
+                    const clone = this.shootAudio.cloneNode();
+                    clone.volume = 0.4;
+                    clone.play().catch(() => this.synthShoot());
+                } else {
+                    this.synthShoot();
+                }
+            }
+
+            playSlash() {
+                this.initAudio();
+                if (this.sliceLoaded) {
+                    const clone = this.sliceAudio.cloneNode();
+                    clone.volume = 0.5;
+                    clone.play().catch(() => this.synthSlash());
+                } else {
+                    this.synthSlash();
+                }
+            }
+
+            synthShoot() {
+                if (!this.audioCtx) return;
+                try {
+                    const osc = this.audioCtx.createOscillator();
+                    const gain = this.audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(320, this.audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(40, this.audioCtx.currentTime + 0.12);
+                    gain.gain.setValueAtTime(0.2, this.audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.12);
+                    osc.connect(gain);
+                    gain.connect(this.audioCtx.destination);
+                    osc.start();
+                    osc.stop(this.audioCtx.currentTime + 0.12);
+                } catch (e) {}
+            }
+
+            synthSlash() {
+                if (!this.audioCtx) return;
+                try {
+                    const osc = this.audioCtx.createOscillator();
+                    const gain = this.audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(600, this.audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(100, this.audioCtx.currentTime + 0.18);
+                    gain.gain.setValueAtTime(0.3, this.audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.18);
+                    osc.connect(gain);
+                    gain.connect(this.audioCtx.destination);
+                    osc.start();
+                    osc.stop(this.audioCtx.currentTime + 0.18);
+                } catch (e) {}
+            }
+        }
+
+        const soundSys = new SoundSystem();
+
+        // --- 2. Image Asset Loader with Fallback ---
+        const wallImg = new Image();
+        let isWallImgLoaded = false;
+        wallImg.src = 'images/wall.ogg';
+        wallImg.onload = () => { isWallImgLoaded = true; };
+        wallImg.onerror = () => { isWallImgLoaded = false; };
+
+        // --- 3. Upgraded High-HP Character Classes ---
+        const CHAR_CLASSES = [
+            {
+                id: 0,
+                name: "스피드 러너",
+                icon: "⚡",
+                color: "#00f3ff",
+                hp: 1500,
+                regenRate: 75, // HP per sec
+                speed: 6.5,
+                maxAmmo: 30,
+                reloadTime: 1000,
+                weaponType: 'SMG',
+                damage: 35,
+                fireRate: 100,
+                bulletSpeed: 16,
+                radius: 18
+            },
+            {
+                id: 1,
+                name: "헤비 탱크",
+                icon: "🛡️",
+                color: "#ff007f",
+                hp: 2500,
+                regenRate: 100,
+                speed: 4.8,
+                maxAmmo: 8,
+                reloadTime: 1800,
+                weaponType: 'SHOTGUN',
+                damage: 30, // 30 x 6 pellets = 180 per shotgun blast
+                fireRate: 600,
+                bulletSpeed: 12,
+                radius: 24
+            },
+            {
+                id: 2,
+                name: "네온 스나이퍼",
+                icon: "🎯",
+                color: "#9d00ff",
+                hp: 1800,
+                regenRate: 80,
+                speed: 5.2,
+                maxAmmo: 5,
+                reloadTime: 2000,
+                weaponType: 'SNIPER',
+                damage: 280,
+                fireRate: 1000,
+                bulletSpeed: 24,
+                radius: 16
+            },
+            {
+                id: 3,
+                name: "사이버 검객",
+                icon: "⚔️",
+                color: "#ffd700",
+                hp: 2000,
+                regenRate: 90,
+                speed: 6.0,
+                maxAmmo: 12,
+                reloadTime: 800,
+                weaponType: 'MELEE_HYBRID',
+                damage: 130, // Slash damage
+                pistolDamage: 45,
+                fireRate: 380,
+                bulletSpeed: 14,
+                radius: 19
+            }
+        ];
+
+        // --- 4. Game World Arena Configuration ---
+        const WORLD = {
+            width: 2200,
+            height: 2200
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let gameState = 'START'; // 'START', 'PLAYING', 'PAUSED', 'ENDED'
+        let selectedCharIdx = 0;
+
+        let player = null;
+        let enemies = [];
+        let bullets = [];
+        let particles = [];
+        let obstacles = [];
+        let keys = {};
+        let mousePos = { x: 0, y: 0 };
+        let camera = { x: 0, y: 0 };
+
+        let totalEnemiesToDefeat = 9;
+        let remainingEnemyQueue = 0;
+        let defeatedEnemiesCount = 0;
+        let lastFrameTime = performance.now();
+
+        // Resize Canvas
+        function resizeCanvas() {
+            const container = document.getElementById('game-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- 5. Arena Obstacle Map Generation ---
+        function generateMapObstacles() {
+            obstacles = [];
+            const blockWidth = 140;
+            const blockHeight = 90;
+            const centerSafeRadius = 260;
+
+            const gridCols = 8;
+            const gridRows = 8;
+            const cellW = WORLD.width / gridCols;
+            const cellH = WORLD.height / gridRows;
+
+            for (let r = 0; r < gridRows; r++) {
+                for (let c = 0; c < gridCols; c++) {
+                    const cx = c * cellW + cellW / 2;
+                    const cy = r * cellH + cellH / 2;
+                    const distFromCenter = Math.hypot(cx - WORLD.width / 2, cy - WORLD.height / 2);
+
+                    if (distFromCenter < centerSafeRadius) continue;
+
+                    if ((r + c) % 2 === 0 || Math.random() < 0.45) {
+                        obstacles.push({
+                            x: cx - blockWidth / 2,
+                            y: cy - blockHeight / 2,
+                            w: blockWidth,
+                            h: blockHeight,
+                            // Hitbox scale exactly 80%
+                            hitboxW: blockWidth * 0.8,
+                            hitboxH: blockHeight * 0.8,
+                            hitboxX: cx - (blockWidth * 0.8) / 2,
+                            hitboxY: cy - (blockHeight * 0.8) / 2
+                        });
+                    }
+                }
+            }
+        }
+
+        // --- 6. Character Class Entity with HP Regeneration ---
+        class Character {
+            constructor(x, y, charClassData, isAI = false) {
+                this.x = x;
+                this.y = y;
+                this.classData = charClassData;
+                this.isAI = isAI;
+
+                this.radius = charClassData.radius;
+                this.maxHp = charClassData.hp;
+                this.hp = charClassData.hp;
+                this.regenRate = charClassData.regenRate;
+                this.speed = charClassData.speed;
+                this.color = charClassData.color;
+
+                this.angle = 0;
+                this.maxAmmo = charClassData.maxAmmo;
+                this.ammo = charClassData.maxAmmo;
+                this.isReloading = false;
+                this.reloadTimer = 0;
+                this.lastShotTime = 0;
+
+                // HP Regeneration tracking
+                this.lastDamageTime = 0;
+                this.isRegenerating = false;
+            }
+
+            takeDamage(amount, now) {
+                this.hp = Math.max(0, this.hp - amount);
+                this.lastDamageTime = now;
+                this.isRegenerating = false;
+            }
+
+            update(now, dt) {
+                // HP Regeneration Logic: If not damaged for 1.0 second (1000ms), regenerate HP
+                if (this.hp > 0 && this.hp < this.maxHp) {
+                    if (now - this.lastDamageTime >= 1000) {
+                        this.isRegenerating = true;
+                        this.hp = Math.min(this.maxHp, this.hp + this.regenRate * dt);
+                        if (!this.isAI) updatePlayerHpHUD();
+                    } else {
+                        this.isRegenerating = false;
+                    }
+                } else {
+                    this.isRegenerating = false;
+                }
+
+                // Reload Handling
+                if (this.isReloading) {
+                    if (now >= this.reloadTimer) {
+                        this.ammo = this.maxAmmo;
+                        this.isReloading = false;
+                        if (!this.isAI) updateAmmoHUD();
+                    }
+                }
+            }
+
+            reload(now) {
+                if (this.isReloading || this.ammo === this.maxAmmo) return;
+                this.isReloading = true;
+                this.reloadTimer = now + this.classData.reloadTime;
+            }
+
+            shoot(targetX, targetY, now) {
+                if (this.isReloading) return;
+                if (now - this.lastShotTime < this.classData.fireRate) return;
+
+                if (this.ammo <= 0) {
+                    this.reload(now);
+                    return;
+                }
+
+                this.lastShotTime = now;
+                const angle = Math.atan2(targetY - this.y, targetX - this.x);
+
+                if (this.classData.weaponType === 'SMG') {
+                    this.ammo--;
+                    soundSys.playShoot();
+                    bullets.push(new Bullet(this.x, this.y, angle, this.classData.bulletSpeed, this.classData.damage, this.color, false, this));
+                } 
+                else if (this.classData.weaponType === 'SHOTGUN') {
+                    this.ammo--;
+                    soundSys.playShoot();
+                    const pelletCount = 6;
+                    for (let i = 0; i < pelletCount; i++) {
+                        const spread = (Math.random() - 0.5) * 0.35;
+                        bullets.push(new Bullet(this.x, this.y, angle + spread, this.classData.bulletSpeed + (Math.random() * 2), this.classData.damage, this.color, false, this));
+                    }
+                } 
+                else if (this.classData.weaponType === 'SNIPER') {
+                    this.ammo--;
+                    soundSys.playShoot();
+                    bullets.push(new Bullet(this.x, this.y, angle, this.classData.bulletSpeed, this.classData.damage, this.color, true, this)); // Piercing
+                } 
+                else if (this.classData.weaponType === 'MELEE_HYBRID') {
+                    soundSys.playSlash();
+                    bullets.push(new Bullet(this.x, this.y, angle, 13, this.classData.damage, this.color, false, this, 'SLASH'));
+                    
+                    if (this.ammo > 0) {
+                        this.ammo--;
+                    } else {
+                        this.reload(now);
+                    }
+                }
+
+                if (!this.isAI) updateAmmoHUD();
+            }
+
+            draw(cameraX, cameraY) {
+                const screenX = this.x - cameraX;
+                const screenY = this.y - cameraY;
+
+                ctx.save();
+                ctx.translate(screenX, screenY);
+
+                // Regen Aura Effect
+                if (this.isRegenerating) {
+                    ctx.save();
+                    ctx.shadowBlur = 18;
+                    ctx.shadowColor = '#00ff66';
+                    ctx.strokeStyle = 'rgba(0, 255, 102, 0.6)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius + 6, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                ctx.rotate(this.angle);
+
+                // Body Glow
+                ctx.shadowBlur = 12;
+                ctx.shadowColor = this.color;
+
+                // Character Base Body
+                ctx.fillStyle = '#0f172a';
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Weapon Display
+                ctx.fillStyle = this.color;
+                if (this.classData.id === 0) {
+                    ctx.fillRect(8, -8, 14, 4);
+                    ctx.fillRect(8, 4, 14, 4);
+                } else if (this.classData.id === 1) {
+                    ctx.fillRect(6, -6, 20, 12);
+                } else if (this.classData.id === 2) {
+                    ctx.fillRect(10, -3, 26, 6);
+                } else if (this.classData.id === 3) {
+                    ctx.beginPath();
+                    ctx.moveTo(12, -2);
+                    ctx.lineTo(28, 0);
+                    ctx.lineTo(12, 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+
+                // Overhead HP Bar
+                ctx.save();
+                ctx.translate(screenX, screenY - this.radius - 12);
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                ctx.fillRect(-22, 0, 44, 6);
+                ctx.fillStyle = this.isRegenerating ? '#00ff66' : (this.isAI ? '#ff007f' : '#00f3ff');
+                const hpRatio = Math.max(0, this.hp / this.maxHp);
+                ctx.fillRect(-22, 0, 44 * hpRatio, 6);
+                ctx.restore();
+            }
+        }
+
+        class Bullet {
+            constructor(x, y, angle, speed, damage, color, isPiercing = false, owner = null, type = 'BULLET') {
+                this.x = x;
+                this.y = y;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.damage = damage;
+                this.color = color;
+                this.isPiercing = isPiercing;
+                this.owner = owner;
+                this.type = type;
+                this.life = 120;
+                this.angle = angle;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+            }
+
+            draw(cameraX, cameraY) {
+                const screenX = this.x - cameraX;
+                const screenY = this.y - cameraY;
+
+                ctx.save();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+
+                if (this.type === 'SLASH') {
+                    ctx.translate(screenX, screenY);
+                    ctx.rotate(this.angle);
+                    ctx.strokeStyle = this.color;
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 24, -Math.PI / 3, Math.PI / 3);
+                    ctx.stroke();
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, this.isPiercing ? 5.5 : 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 6;
+                this.vy = (Math.random() - 0.5) * 6;
+                this.color = color;
+                this.alpha = 1;
+                this.decay = 0.03 + Math.random() * 0.02;
+                this.size = Math.random() * 4 + 2;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= this.decay;
+            }
+
+            draw(cameraX, cameraY) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = this.color;
+                ctx.fillRect(this.x - cameraX, this.y - cameraY, this.size, this.size);
+                ctx.restore();
+            }
+        }
+
+        // --- 7. Setup & Game State Functions ---
+        function initGame() {
+            generateMapObstacles();
+
+            const pClass = CHAR_CLASSES[selectedCharIdx];
+            player = new Character(WORLD.width / 2, WORLD.height / 2, pClass, false);
+
+            enemies = [];
+            bullets = [];
+            particles = [];
+
+            totalEnemiesToDefeat = 9;
+            defeatedEnemiesCount = 0;
+            remainingEnemyQueue = 9;
+
+            spawnEnemies();
+
+            updatePlayerHpHUD();
+            updateAmmoHUD();
+            updateEnemyCountHUD();
+
+            document.getElementById('hud-char-name').innerText = pClass.name;
+            document.getElementById('hud-char-name').style.color = pClass.color;
+        }
+
+        function spawnEnemies() {
+            const maxActive = 4;
+            while (enemies.length < maxActive && remainingEnemyQueue > 0) {
+                const randomClassIdx = Math.floor(Math.random() * CHAR_CLASSES.length);
+                const enemyClass = CHAR_CLASSES[randomClassIdx];
+
+                let ex, ey;
+                do {
+                    ex = Math.random() * (WORLD.width - 200) + 100;
+                    ey = Math.random() * (WORLD.height - 200) + 100;
+                } while (Math.hypot(ex - player.x, ey - player.y) < 550);
+
+                const enemyChar = new Character(ex, ey, enemyClass, true);
+                enemies.push(enemyChar);
+                remainingEnemyQueue--;
+            }
+        }
+
+        // --- 8. Collisions & Visual Effects ---
+        function checkCircleRectCollision(circleX, circleY, radius, rect) {
+            const rx = rect.hitboxX;
+            const ry = rect.hitboxY;
+            const rw = rect.hitboxW;
+            const rh = rect.hitboxH;
+
+            const closestX = Math.max(rx, Math.min(circleX, rx + rw));
+            const closestY = Math.max(ry, Math.min(circleY, ry + rh));
+
+            const distanceX = circleX - closestX;
+            const distanceY = circleY - closestY;
+
+            return (distanceX * distanceX + distanceY * distanceY) < (radius * radius);
+        }
+
+        function createSparkle(x, y, color, count = 8) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        // --- 9. Core Game Logic Loop ---
+        function updateGame(now, dt) {
+            if (gameState !== 'PLAYING') return;
+
+            // Player Movement
+            let moveX = 0;
+            let moveY = 0;
+            if (keys['w'] || keys['W'] || keys['ArrowUp']) moveY -= 1;
+            if (keys['s'] || keys['S'] || keys['ArrowDown']) moveY += 1;
+            if (keys['a'] || keys['A'] || keys['ArrowLeft']) moveX -= 1;
+            if (keys['d'] || keys['D'] || keys['ArrowRight']) moveX += 1;
+
+            if (moveX !== 0 && moveY !== 0) {
+                moveX *= 0.7071;
+                moveY *= 0.7071;
+            }
+
+            const nextPX = player.x + moveX * player.speed;
+            const nextPY = player.y + moveY * player.speed;
+
+            if (nextPX >= player.radius && nextPX <= WORLD.width - player.radius) {
+                let collide = false;
+                for (let obs of obstacles) {
+                    if (checkCircleRectCollision(nextPX, player.y, player.radius, obs)) {
+                        collide = true; break;
+                    }
+                }
+                if (!collide) player.x = nextPX;
+            }
+
+            if (nextPY >= player.radius && nextPY <= WORLD.height - player.radius) {
+                let collide = false;
+                for (let obs of obstacles) {
+                    if (checkCircleRectCollision(player.x, nextPY, player.radius, obs)) {
+                        collide = true; break;
+                    }
+                }
+                if (!collide) player.y = nextPY;
+            }
+
+            // Aim
+            const worldMouseX = mousePos.x + camera.x;
+            const worldMouseY = mousePos.y + camera.y;
+            player.angle = Math.atan2(worldMouseY - player.y, worldMouseX - player.x);
+
+            // Shooting
+            if (keys['mouse0']) {
+                player.shoot(worldMouseX, worldMouseY, now);
+            }
+
+            player.update(now, dt);
+
+            // AI Enemies Update
+            enemies.forEach((enemy) => {
+                enemy.update(now, dt);
+                enemy.angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+
+                const distToPlayer = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+                if (distToPlayer > 180) {
+                    const eMoveX = Math.cos(enemy.angle) * enemy.speed * 0.75;
+                    const eMoveY = Math.sin(enemy.angle) * enemy.speed * 0.75;
+
+                    let nEX = enemy.x + eMoveX;
+                    let nEY = enemy.y + eMoveY;
+
+                    let eCollide = false;
+                    for (let obs of obstacles) {
+                        if (checkCircleRectCollision(nEX, nEY, enemy.radius, obs)) {
+                            eCollide = true; break;
+                        }
+                    }
+                    if (!eCollide) {
+                        enemy.x = nEX;
+                        enemy.y = nEY;
+                    }
+                }
+
+                if (distToPlayer < 650 && Math.random() < 0.04) {
+                    enemy.shoot(player.x + (Math.random() - 0.5) * 40, player.y + (Math.random() - 0.5) * 40, now);
+                }
+            });
+
+            // Bullets Collision
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.update();
+
+                if (b.x < 0 || b.x > WORLD.width || b.y < 0 || b.y > WORLD.height || b.life <= 0) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                // Obstacle Hit Check
+                let hitObstacle = false;
+                for (let obs of obstacles) {
+                    if (b.x >= obs.hitboxX && b.x <= obs.hitboxX + obs.hitboxW &&
+                        b.y >= obs.hitboxY && b.y <= obs.hitboxY + obs.hitboxH) {
+                        hitObstacle = true;
+                        createSparkle(b.x, b.y, b.color, 4);
+                        break;
+                    }
+                }
+                if (hitObstacle) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                // Hit Enemy
+                if (b.owner === player) {
+                    for (let j = enemies.length - 1; j >= 0; j--) {
+                        const enemy = enemies[j];
+                        if (Math.hypot(b.x - enemy.x, b.y - enemy.y) < enemy.radius + 4) {
+                            enemy.takeDamage(b.damage, now);
+                            createSparkle(b.x, b.y, enemy.color, 8);
+
+                            if (!b.isPiercing) bullets.splice(i, 1);
+
+                            if (enemy.hp <= 0) {
+                                createSparkle(enemy.x, enemy.y, enemy.color, 25);
+                                enemies.splice(j, 1);
+                                defeatedEnemiesCount++;
+                                updateEnemyCountHUD();
+
+                                if (defeatedEnemiesCount >= totalEnemiesToDefeat) {
+                                    triggerVictory();
+                                    return;
+                                } else {
+                                    spawnEnemies();
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                // Hit Player
+                else {
+                    if (Math.hypot(b.x - player.x, b.y - player.y) < player.radius + 4) {
+                        player.takeDamage(b.damage, now);
+                        createSparkle(b.x, b.y, '#ff007f', 8);
+                        updatePlayerHpHUD();
+
+                        if (!b.isPiercing) bullets.splice(i, 1);
+
+                        if (player.hp <= 0) {
+                            triggerGameOver();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+
+            // Camera Tracking
+            camera.x = player.x - canvas.width / 2;
+            camera.y = player.y - canvas.height / 2;
+            camera.x = Math.max(0, Math.min(WORLD.width - canvas.width, camera.x));
+            camera.y = Math.max(0, Math.min(WORLD.height - canvas.height, camera.y));
+
+            // Reload Indicator Bar Update
+            if (player.isReloading) {
+                const remaining = player.reloadTimer - now;
+                const ratio = Math.max(0, 1 - (remaining / player.classData.reloadTime));
+                document.getElementById('reload-bar').style.width = `${ratio * 100}%`;
+                document.getElementById('reload-indicator').classList.remove('hidden');
+            } else {
+                document.getElementById('reload-indicator').classList.add('hidden');
+            }
+        }
+
+        // --- 10. Render Loop ---
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState === 'PLAYING' || gameState === 'PAUSED') {
+                // Background Grid
+                ctx.save();
+                ctx.strokeStyle = 'rgba(0, 243, 255, 0.08)';
+                ctx.lineWidth = 1;
+                const gridSize = 80;
+                const startX = -camera.x % gridSize;
+                const startY = -camera.y % gridSize;
+
+                for (let x = startX; x < canvas.width; x += gridSize) {
+                    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+                }
+                for (let y = startY; y < canvas.height; y += gridSize) {
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+                }
+                ctx.restore();
+
+                // World Outer Cyan Border
+                ctx.save();
+                ctx.strokeStyle = '#00f3ff';
+                ctx.lineWidth = 4;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#00f3ff';
+                ctx.strokeRect(-camera.x, -camera.y, WORLD.width, WORLD.height);
+                ctx.restore();
+
+                // Obstacles
+                obstacles.forEach(obs => {
+                    const screenX = obs.x - camera.x;
+                    const screenY = obs.y - camera.y;
+
+                    if (isWallImgLoaded) {
+                        ctx.drawImage(wallImg, screenX, screenY, obs.w, obs.h);
+                    } else {
+                        ctx.save();
+                        ctx.fillStyle = '#0f172a';
+                        ctx.strokeStyle = '#00f3ff';
+                        ctx.lineWidth = 2;
+                        ctx.shadowBlur = 8;
+                        ctx.shadowColor = '#00f3ff';
+                        ctx.fillRect(screenX, screenY, obs.w, obs.h);
+                        ctx.strokeRect(screenX, screenY, obs.w, obs.h);
+                        
+                        ctx.strokeStyle = 'rgba(0, 243, 255, 0.3)';
+                        ctx.beginPath();
+                        ctx.moveTo(screenX, screenY); ctx.lineTo(screenX + obs.w, screenY + obs.h);
+                        ctx.moveTo(screenX + obs.w, screenY); ctx.lineTo(screenX + obs.w, screenY);
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                });
+
+                // Render Entities
+                particles.forEach(p => p.draw(camera.x, camera.y));
+                bullets.forEach(b => b.draw(camera.x, camera.y));
+                enemies.forEach(e => e.draw(camera.x, camera.y));
+                if (player) player.draw(camera.x, camera.y);
+            }
+        }
+
+        function gameLoop(now) {
+            const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
+            lastFrameTime = now;
+
+            updateGame(now, dt);
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- 11. HUD Updates & Modals ---
+        function updatePlayerHpHUD() {
+            if (!player) return;
+            const ratio = Math.max(0, player.hp / player.maxHp);
+            document.getElementById('hud-hp-bar').style.width = `${ratio * 100}%`;
+            document.getElementById('hud-hp-text').innerText = `${Math.ceil(player.hp)} / ${player.maxHp}`;
+
+            const badge = document.getElementById('hud-regen-badge');
+            if (player.isRegenerating) {
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function updateAmmoHUD() {
+            if (!player) return;
+            document.getElementById('hud-ammo-text').innerText = `${player.ammo} / ${player.maxAmmo}`;
+            const ratio = player.ammo / player.maxAmmo;
+            document.getElementById('hud-ammo-bar').style.width = `${ratio * 100}%`;
+        }
+
+        function updateEnemyCountHUD() {
+            const remaining = totalEnemiesToDefeat - defeatedEnemiesCount;
+            document.getElementById('hud-enemy-count').innerText = `${remaining} / ${totalEnemiesToDefeat}`;
+        }
+
+        function triggerVictory() {
+            gameState = 'ENDED';
+            document.getElementById('end-title').innerText = "STAGE CLEAR";
+            document.getElementById('end-title').className = "text-4xl font-black font-orbitron text-cyan-400 neon-text-cyan";
+            document.getElementById('end-desc').innerText = "모든 라이벌 캐릭터 요원을 물리치고 승리했습니다!";
+            document.getElementById('stat-kills').innerText = `${defeatedEnemiesCount} / ${totalEnemiesToDefeat}`;
+            document.getElementById('stat-class').innerText = CHAR_CLASSES[selectedCharIdx].name;
+            document.getElementById('end-modal').classList.remove('hidden');
+        }
+
+        function triggerGameOver() {
+            gameState = 'ENDED';
+            document.getElementById('end-title').innerText = "MISSION FAILED";
+            document.getElementById('end-title').className = "text-4xl font-black font-orbitron text-pink-500 neon-text-pink";
+            document.getElementById('end-desc').innerText = "라이벌 요원에게 패배했습니다.";
+            document.getElementById('stat-kills').innerText = `${defeatedEnemiesCount} / ${totalEnemiesToDefeat}`;
+            document.getElementById('stat-class').innerText = CHAR_CLASSES[selectedCharIdx].name;
+            document.getElementById('end-modal').classList.remove('hidden');
+        }
+
+        function togglePause() {
+            if (gameState === 'PLAYING') {
+                gameState = 'PAUSED';
+                document.getElementById('pause-modal').classList.remove('hidden');
+            } else if (gameState === 'PAUSED') {
+                gameState = 'PLAYING';
+                document.getElementById('pause-modal').classList.add('hidden');
+            }
+        }
+
+        function startGame() {
+            document.getElementById('start-modal').classList.add('hidden');
+            document.getElementById('end-modal').classList.add('hidden');
+            document.getElementById('pause-modal').classList.add('hidden');
+            document.getElementById('hud-overlay').classList.remove('hidden');
+
+            initGame();
+            gameState = 'PLAYING';
+        }
+
+        // --- 12. Input Event Listeners ---
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+
+            if (e.key === 'Enter' && gameState === 'START') {
+                startGame();
+            }
+
+            if ((e.key === 'c' || e.key === 'C' || e.key === 'ㅊ') && (gameState === 'PLAYING' || gameState === 'PAUSED')) {
+                togglePause();
+            }
+
+            if ((e.key === 'r' || e.key === 'R' || e.key === 'ㄱ') && gameState === 'PLAYING' && player) {
+                player.reload(performance.now());
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mousePos.x = e.clientX - rect.left;
+            mousePos.y = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0) keys['mouse0'] = true;
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 0) keys['mouse0'] = false;
+        });
+
+        // UI Character Card Selection
+        document.querySelectorAll('.char-card').forEach((card) => {
+            card.addEventListener('click', () => {
+                document.querySelectorAll('.char-card').forEach(c => {
+                    c.classList.remove('selected', 'border-cyan-500');
+                    c.classList.add('border-slate-700');
+                });
+                card.classList.add('selected', 'border-cyan-500');
+                selectedCharIdx = parseInt(card.getAttribute('data-char'), 10);
+            });
+        });
+
+        // UI Buttons
+        document.getElementById('btn-start').addEventListener('click', startGame);
+        document.getElementById('btn-resume').addEventListener('click', togglePause);
+        document.getElementById('btn-restart-pause').addEventListener('click', () => {
+            document.getElementById('pause-modal').classList.add('hidden');
+            startGame();
+        });
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            document.getElementById('end-modal').classList.add('hidden');
+            document.getElementById('start-modal').classList.remove('hidden');
+            document.getElementById('hud-overlay').classList.add('hidden');
+            gameState = 'START';
+        });
+
+        // Start Loop
+        window.onload = () => {
+            lastFrameTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
